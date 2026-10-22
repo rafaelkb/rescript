@@ -20,6 +20,10 @@ import {
   type VideoExportFormat,
   type VideoExportResolution,
 } from "@/lib/exportArgs";
+import {
+  loadMicroFadesPreference,
+  saveMicroFadesPreference,
+} from "@/lib/exportPrefs";
 import { activeMediaEngine, exportMedia, type MediaEngine } from "@/lib/mediaEngine";
 import {
   discardNativeExport,
@@ -135,6 +139,10 @@ export default function ExportDialog() {
     pickedResolution ??
     defaultExportResolution(sourceVideo?.videoWidth ?? 0, sourceVideo?.videoHeight ?? 0);
   const [audioFormat, setAudioFormat] = useState<AudioExportFormat>("m4a");
+  // Micro fades smooth the audio at cut points; on by default, remembered.
+  const [microFades, setMicroFadesState] = useState(() =>
+    loadMicroFadesPreference()
+  );
   const [textFormat, setTextFormat] = useState<TranscriptFormat>("txt");
   const [includeTimestamps, setIncludeTimestamps] = useState(false);
   const [shortCues, setShortCues] = useState(true);
@@ -243,6 +251,15 @@ export default function ExportDialog() {
     [clearMediaExport]
   );
 
+  const setMicroFades = useCallback(
+    (value: boolean) => {
+      saveMicroFadesPreference(value);
+      setMicroFadesState(value);
+      clearMediaExport();
+    },
+    [clearMediaExport]
+  );
+
   const startMediaExport = useCallback(async () => {
     if (!videoFile) return;
     if (activeTab === "video" && isAudioProject) return;
@@ -265,12 +282,13 @@ export default function ExportDialog() {
         editedDuration,
         setProgress,
         activeTab === "audio"
-          ? { kind: "audio", format: audioFormat }
+          ? { kind: "audio", format: audioFormat, microFades }
           : {
               kind: "video",
               withAudio: hasAudioTrack,
               format: videoFormat,
               resolution,
+              microFades,
             }
       );
       setRenderEngine(result.engine);
@@ -317,6 +335,7 @@ export default function ExportDialog() {
     audioFormat,
     videoFormat,
     resolution,
+    microFades,
     setStatus,
     setExportResult,
   ]);
@@ -551,17 +570,29 @@ export default function ExportDialog() {
               disabled={exporting}
               onChange={setResolutionOption}
             />
+            {hasAudioTrack && (
+              <MicroFadesOption
+                checked={microFades}
+                disabled={exporting}
+                onChange={setMicroFades}
+              />
+            )}
           </div>
         )}
 
         {activeTab === "audio" && (
-          <div className="mb-5">
+          <div className="mb-5 space-y-4">
             <OptionGroup
               label={t("export.format")}
               value={audioFormat}
               options={AUDIO_FORMATS}
               disabled={exporting}
               onChange={setAudioFormatOption}
+            />
+            <MicroFadesOption
+              checked={microFades}
+              disabled={exporting}
+              onChange={setMicroFades}
             />
           </div>
         )}
@@ -940,6 +971,39 @@ function OptionGroup<T extends string>({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Micro-fades toggle, shared by the video and audio tabs: tiny fades at every
+ * cut point so the concatenated audio doesn't click.
+ */
+function MicroFadesOption({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div>
+      <label className="flex cursor-pointer items-center gap-2.5 rounded-lg bg-zinc-50 px-3 py-2.5 text-sm text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+          className="h-3.5 w-3.5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-400 dark:border-zinc-600 dark:bg-zinc-900"
+        />
+        <span>{t("export.microFades")}</span>
+      </label>
+      <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+        {t("export.microFadesHelp")}
+      </p>
     </div>
   );
 }

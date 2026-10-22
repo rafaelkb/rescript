@@ -26,6 +26,10 @@ export default function MediaPreview() {
     cutsRef.current = cuts;
   }, [cuts]);
 
+  // Set while *we* dip the volume around a cut skip; never clobber a mute the
+  // user (or the browser) asked for.
+  const autoMutedRef = useRef(false);
+
   const refCb = useCallback(
     (el: HTMLMediaElement | null) => {
       mediaRef.current = el;
@@ -37,6 +41,7 @@ export default function MediaPreview() {
   // Playback loop: mirror time into the store and skip over cut ranges.
   useEffect(() => {
     let raf = 0;
+    let unmuteAt = Infinity;
     const tick = () => {
       const media = mediaRef.current;
       if (media) {
@@ -44,6 +49,13 @@ export default function MediaPreview() {
         if (!media.paused) {
           const cut = cutRangeAt(t, cutsRef.current);
           if (cut) {
+            // Dip the volume across the splice so the discontinuity doesn't
+            // click — the same idea as the export's micro fades. Start the dip
+            // just before a cut is reached and hold it past the landing point.
+            if (!media.muted) {
+              media.muted = true;
+              autoMutedRef.current = true;
+            }
             const target = cut.end + PLAYHEAD_EPSILON_S;
             if (target >= media.duration - 0.05) {
               media.pause();
@@ -52,6 +64,18 @@ export default function MediaPreview() {
             } else {
               media.currentTime = target;
               t = target;
+            }
+            unmuteAt = t + 0.03;
+          } else {
+            const cutStart = cutsRef.current.find((c) => c.start > t)?.start;
+            if (cutStart != null && cutStart - t < 0.045) {
+              if (!media.muted) {
+                media.muted = true;
+                autoMutedRef.current = true;
+              }
+            } else if (autoMutedRef.current && t >= unmuteAt) {
+              media.muted = false;
+              autoMutedRef.current = false;
             }
           }
         }
@@ -68,6 +92,18 @@ export default function MediaPreview() {
     useEditorStore.getState().togglePlayback();
   }, []);
 
+  const handlePlay = useCallback(() => setPlaying(true), [setPlaying]);
+  // A paused element can't hold a pending dip; hand the volume back so the
+  // next play doesn't start silent.
+  const handlePause = useCallback(() => {
+    setPlaying(false);
+    const media = mediaRef.current;
+    if (media && autoMutedRef.current) {
+      media.muted = false;
+      autoMutedRef.current = false;
+    }
+  }, [setPlaying]);
+
   if (!mediaUrl) return null;
 
   if (isAudio) {
@@ -77,8 +113,8 @@ export default function MediaPreview() {
         src={mediaUrl}
         preload="metadata"
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onPlay={handlePlay}
+        onPause={handlePause}
         className="hidden"
       />
     );
@@ -93,8 +129,8 @@ export default function MediaPreview() {
           playsInline
           onClick={togglePlay}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
+          onPlay={handlePlay}
+          onPause={handlePause}
           className="max-h-full max-w-full cursor-pointer rounded-sm bg-black shadow-lg shadow-zinc-900/10 dark:shadow-black/40"
         />
       </div>

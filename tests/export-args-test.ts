@@ -31,17 +31,20 @@ const ranges = [
 ];
 
 function main() {
-  // Video, with audio, original resolution — the default export.
+  // Video, with audio, original resolution — the default export. Micro fades
+  // are automatic: every kept segment's audio fades in and out over 5 ms.
   {
     const plan = buildVideoExport(ranges, {});
     eq(
       plan.filter,
       "[0:v]trim=start=0.000:end=1.500,setpts=PTS-STARTPTS[v0];" +
-        "[0:a]atrim=start=0.000:end=1.500,asetpts=PTS-STARTPTS[a0];" +
+        "[0:a]atrim=start=0.000:end=1.500,asetpts=PTS-STARTPTS," +
+        "afade=t=in:st=0.000:d=0.005,afade=t=out:st=1.495:d=0.005[a0];" +
         "[0:v]trim=start=2.250:end=4.000,setpts=PTS-STARTPTS[v1];" +
-        "[0:a]atrim=start=2.250:end=4.000,asetpts=PTS-STARTPTS[a1];" +
+        "[0:a]atrim=start=2.250:end=4.000,asetpts=PTS-STARTPTS," +
+        "afade=t=in:st=0.000:d=0.005,afade=t=out:st=1.745:d=0.005[a1];" +
         "[v0][a0][v1][a1]concat=n=2:v=1:a=1[outv][outa]",
-      "video filtergraph"
+      "video filtergraph with micro fades"
     );
     eq(plan.streamArgs, ["-map", "[outv]", "-map", "[outa]"], "video maps");
     eq(
@@ -54,6 +57,32 @@ function main() {
       "mp4 codec args (wasm keeps ultrafast)"
     );
     eq([plan.ext, plan.mime], ["mp4", "video/mp4"], "mp4 container");
+  }
+
+  // Opting out of micro fades restores the plain atrim chain.
+  {
+    const plan = buildVideoExport(ranges, { microFades: false });
+    eq(
+      plan.filter,
+      "[0:v]trim=start=0.000:end=1.500,setpts=PTS-STARTPTS[v0];" +
+        "[0:a]atrim=start=0.000:end=1.500,asetpts=PTS-STARTPTS[a0];" +
+        "[0:v]trim=start=2.250:end=4.000,setpts=PTS-STARTPTS[v1];" +
+        "[0:a]atrim=start=2.250:end=4.000,asetpts=PTS-STARTPTS[a1];" +
+        "[v0][a0][v1][a1]concat=n=2:v=1:a=1[outv][outa]",
+      "video filtergraph without micro fades"
+    );
+  }
+
+  // Fades clamp to half a segment, so slivers can't out-fade themselves.
+  {
+    const plan = buildAudioExport([{ start: 0, end: 0.006 }], {});
+    eq(
+      plan.filter,
+      "[0:a]atrim=start=0.000:end=0.006,asetpts=PTS-STARTPTS," +
+        "afade=t=in:st=0.000:d=0.003,afade=t=out:st=0.003:d=0.003[a0];" +
+        "[a0]concat=n=1:v=0:a=1[outa]",
+      "fade clamped on a tiny segment"
+    );
   }
 
   // Native tuning only changes the preset.
@@ -128,10 +157,20 @@ function main() {
     const m4a = buildAudioExport(ranges, {});
     eq(
       m4a.filter,
+      "[0:a]atrim=start=0.000:end=1.500,asetpts=PTS-STARTPTS," +
+        "afade=t=in:st=0.000:d=0.005,afade=t=out:st=1.495:d=0.005[a0];" +
+        "[0:a]atrim=start=2.250:end=4.000,asetpts=PTS-STARTPTS," +
+        "afade=t=in:st=0.000:d=0.005,afade=t=out:st=1.745:d=0.005[a1];" +
+        "[a0][a1]concat=n=2:v=0:a=1[outa]",
+      "audio filtergraph with micro fades"
+    );
+    const noFades = buildAudioExport(ranges, { microFades: false });
+    eq(
+      noFades.filter,
       "[0:a]atrim=start=0.000:end=1.500,asetpts=PTS-STARTPTS[a0];" +
         "[0:a]atrim=start=2.250:end=4.000,asetpts=PTS-STARTPTS[a1];" +
         "[a0][a1]concat=n=2:v=0:a=1[outa]",
-      "audio filtergraph"
+      "audio filtergraph without micro fades"
     );
     eq(m4a.streamArgs, ["-map", "[outa]"], "audio maps");
     eq(
@@ -154,14 +193,19 @@ function main() {
       kind: "video",
       keepRanges: ranges,
       editedDuration: 3.25,
-      options: { withAudio: true, format: "mp4", resolution: "720" },
+      options: {
+        withAudio: true,
+        format: "mp4",
+        resolution: "720",
+        microFades: true,
+      },
     };
     eq(parseExportRequest(video), video, "valid video request round-trips");
     const audio = {
       kind: "audio",
       keepRanges: ranges,
       editedDuration: 3.25,
-      options: { format: "wav" },
+      options: { format: "wav", microFades: true },
     };
     eq(parseExportRequest(audio), audio, "valid audio request round-trips");
 
@@ -178,7 +222,9 @@ function main() {
       { ...video, options: { ...video.options, format: "mov" } },
       { ...video, options: { ...video.options, resolution: "480" } },
       { ...video, options: { ...video.options, withAudio: "yes" } },
-      { ...audio, options: { format: "flac" } },
+      { ...video, options: { ...video.options, microFades: "yes" } },
+      { ...audio, options: { format: "flac", microFades: true } },
+      { ...audio, options: { format: "wav", microFades: 1 } },
       { ...video, keepRanges: Array.from({ length: 20_001 }, (_, i) => ({ start: i, end: i + 0.5 })) },
     ];
     bad.forEach((request, i) => {
@@ -191,6 +237,19 @@ function main() {
       options: { ...video.options, args: ["-f", "null"] },
     });
     eq(extra?.options, video.options, "unknown option keys are dropped");
+
+    // An absent microFades flag means "on" (the fades are automatic).
+    const omitted = parseExportRequest({
+      kind: "audio",
+      keepRanges: ranges,
+      editedDuration: 3.25,
+      options: { format: "wav" },
+    });
+    eq(
+      omitted?.options,
+      { format: "wav", microFades: true },
+      "microFades defaults to on when the wire omits it"
+    );
   }
 
   // -progress parsing: split across chunks, N/A and negative values ignored.

@@ -1,7 +1,13 @@
 import {
+  clampSilenceThreshold,
+  DEFAULT_SILENCE_THRESHOLD,
   findSilenceRanges,
+  loadSilenceThreshold,
   MIN_SILENCE_DURATION,
+  saveSilenceThreshold,
   SILENCE_PAD,
+  SILENCE_THRESHOLD_MAX,
+  SILENCE_THRESHOLD_MIN,
 } from "../lib/silences";
 import type { ManualCut, Word } from "../lib/types";
 
@@ -107,6 +113,53 @@ function assert(cond: boolean, msg: string): void {
   const second = findSilenceRanges(words, 5.0, manual);
   assert(second.length === 0, `expected no remaining silences, got ${second.length}`);
   console.log("idempotent after cut: ok");
+}
+
+
+{
+  // Adjustable threshold: clamped to the slider range, persisted round trip.
+  assert(
+    nearly(clampSilenceThreshold(0.05), SILENCE_THRESHOLD_MIN),
+    "clamp low"
+  );
+  assert(
+    nearly(clampSilenceThreshold(9), SILENCE_THRESHOLD_MAX),
+    "clamp high"
+  );
+  assert(
+    nearly(clampSilenceThreshold(Number.NaN), DEFAULT_SILENCE_THRESHOLD),
+    "clamp garbage"
+  );
+
+  const store = new Map<string, string>();
+  (globalThis as Record<string, unknown>).window = {
+    localStorage: {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+    },
+  };
+  try {
+    assert(nearly(loadSilenceThreshold(), DEFAULT_SILENCE_THRESHOLD), "default");
+    saveSilenceThreshold(1.25);
+    assert(nearly(loadSilenceThreshold(), 1.25), "persisted round trip");
+    saveSilenceThreshold(50);
+    assert(nearly(loadSilenceThreshold(), SILENCE_THRESHOLD_MAX), "saved clamped");
+  } finally {
+    delete (globalThis as Record<string, unknown>).window;
+  }
+  console.log("threshold prefs: ok");
+}
+
+{
+  // The threshold is what findSilenceRanges measures gaps against.
+  const words = [w(1, 1.0, 1.5), w(2, 3.0, 3.5)];
+  const none = findSilenceRanges(words, 5.0, [], 1.4);
+  assert(none.length === 2, "raising the threshold drops short gaps");
+  const more = findSilenceRanges(words, 5.0, [], 0.2);
+  assert(more.length === 3, "lowering the threshold finds short gaps");
+  const strict = findSilenceRanges(words, 5.0, [], 1.6);
+  assert(strict.length === 0, "a threshold above every gap finds none");
+  console.log("threshold parameter: ok");
 }
 
 console.log("ALL SILENCE TESTS PASSED");

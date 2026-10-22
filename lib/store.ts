@@ -27,6 +27,7 @@ import {
   trimEdgeResult,
 } from "./edits";
 import { isModelId, loadModelPreference, saveModelPreference } from "./models";
+import { snapDeletionCutPoints } from "./cutSnap";
 import { isTranscriptSource, type TranscriptSource } from "./source";
 import { trackEvent } from "./telemetry";
 import {
@@ -682,12 +683,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   deleteWords: (ids) => {
     if (ids.length === 0) return;
-    const { words } = get();
+    const { words, waveform, duration } = get();
     const idSet = new Set(ids);
+    const newlyDeleted: number[] = [];
+    const next = words.map((w) => {
+      if (idSet.has(w.id) && !w.deleted) {
+        newlyDeleted.push(w.id);
+        return { ...w, deleted: true };
+      }
+      return w;
+    });
     pushEdit(get, set, {
-      words: words.map((w) =>
-        idSet.has(w.id) && !w.deleted ? { ...w, deleted: true } : w
-      ),
+      // Snap the new cuts' outer edges onto the audio gaps around the deleted
+      // run (see lib/cutSnap.ts): word timestamps run tight often enough that
+      // cutting at them verbatim leaves fragments of the deleted speech.
+      words: snapDeletionCutPoints(next, newlyDeleted, waveform, duration),
       selectedCutIndex: null,
     });
   },

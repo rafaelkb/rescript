@@ -112,3 +112,51 @@ export function findSilenceRanges(
   }
   return out;
 }
+
+/** Bounds for the user-adjustable silence threshold (seconds). */
+export const SILENCE_THRESHOLD_MIN = 0.1;
+export const SILENCE_THRESHOLD_MAX = 2;
+
+/** The threshold "Remove silences" uses until the user changes it. */
+export const DEFAULT_SILENCE_THRESHOLD = MIN_SILENCE_DURATION;
+
+const SILENCE_THRESHOLD_STORAGE_KEY = "rescript.silence-threshold";
+
+/** Clamp to the slider's range; anything unparseable falls back to the default. */
+export function clampSilenceThreshold(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_SILENCE_THRESHOLD;
+  return Math.min(
+    SILENCE_THRESHOLD_MAX,
+    Math.max(SILENCE_THRESHOLD_MIN, value)
+  );
+}
+
+/** Read the saved silence threshold from localStorage (defaults to 0.3 s). */
+export function loadSilenceThreshold(): number {
+  if (typeof window === "undefined") return DEFAULT_SILENCE_THRESHOLD;
+  try {
+    const raw = window.localStorage.getItem(SILENCE_THRESHOLD_STORAGE_KEY);
+    if (raw != null) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) return clampSilenceThreshold(parsed);
+    }
+  } catch {
+    // private mode / disabled storage
+  }
+  return DEFAULT_SILENCE_THRESHOLD;
+}
+
+/** Persist the silence threshold for the next visit; returns the clamped value. */
+export function saveSilenceThreshold(value: number): number {
+  const clamped = clampSilenceThreshold(value);
+  if (typeof window === "undefined") return clamped;
+  try {
+    window.localStorage.setItem(
+      SILENCE_THRESHOLD_STORAGE_KEY,
+      String(clamped)
+    );
+  } catch {
+    // private mode / disabled storage
+  }
+  return clamped;
+}

@@ -7,8 +7,10 @@ import { findDeletedFillerWordIds, findFillerWordIds } from "@/lib/fillers";
 import {
   findSilenceCuts,
   findSilenceRanges,
-  MIN_SILENCE_DURATION,
+  SILENCE_THRESHOLD_MAX,
+  SILENCE_THRESHOLD_MIN,
 } from "@/lib/silences";
+import { useSilenceThreshold } from "@/hooks/useSilenceThreshold";
 import Popover, { PopoverContent, PopoverTrigger } from "./Popover";
 import { useI18n } from "./I18nProvider";
 import type { MessageKey } from "@/lib/i18n";
@@ -76,9 +78,11 @@ const TOOLS: ToolDef[] = [
 ];
 
 /**
- * Collapses the bulk transcript cleanups behind one trigger. Tools with nothing
- * to do drop out, so the badge doubles as "how many cleanups are available
- * right now" — and the menu hides itself when that leaves none.
+ * Collapses the bulk transcript cleanups behind one trigger. Tools with
+ * nothing to do drop out, so the badge doubles as "how many cleanups are
+ * available right now". The menu itself stays reachable whenever there is a
+ * transcript, because the silence-threshold slider can turn a "nothing to do"
+ * back into work worth doing.
  */
 export default function TranscriptToolsMenu() {
   const { t } = useI18n();
@@ -89,15 +93,17 @@ export default function TranscriptToolsMenu() {
   const restoreWords = useEditorStore((s) => s.restoreWords);
   const cutRanges = useEditorStore((s) => s.cutRanges);
   const restoreRanges = useEditorStore((s) => s.restoreRanges);
+  const { threshold, setThreshold } = useSilenceThreshold();
 
   const [open, setOpen] = useState(false);
   const panelId = useId();
+  const sliderId = useId();
 
   const ctx = useMemo<ToolContext>(
     () => ({
       fillerIds: findFillerWordIds(words),
       deletedFillerIds: findDeletedFillerWordIds(words),
-      silenceRanges: findSilenceRanges(words, duration, manualCuts),
+      silenceRanges: findSilenceRanges(words, duration, manualCuts, threshold),
       silenceCuts: findSilenceCuts(words, manualCuts),
       deleteWords,
       restoreWords,
@@ -108,6 +114,7 @@ export default function TranscriptToolsMenu() {
       words,
       duration,
       manualCuts,
+      threshold,
       deleteWords,
       restoreWords,
       cutRanges,
@@ -123,7 +130,7 @@ export default function TranscriptToolsMenu() {
     [ctx]
   );
 
-  if (available.length === 0) return null;
+  if (available.length === 0 && words.length === 0) return null;
 
   return (
     <Popover open={open} onOpenChange={setOpen} placement="bottom-end" backdrop>
@@ -140,9 +147,11 @@ export default function TranscriptToolsMenu() {
           >
             <Zap size={14} />
             <span className="hidden sm:inline">{t("common.tools")}</span>
-            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-              {available.length}
-            </span>
+            {available.length > 0 && (
+              <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                {available.length}
+              </span>
+            )}
           </button>
         </PopoverTrigger>
 
@@ -158,7 +167,7 @@ export default function TranscriptToolsMenu() {
               type="button"
               role="menuitem"
               title={t(tool.titleKey, {
-                seconds: MIN_SILENCE_DURATION,
+                seconds: threshold,
               })}
               onClick={() => {
                 tool.run(ctx);
@@ -175,6 +184,35 @@ export default function TranscriptToolsMenu() {
               </span>
             </button>
           ))}
+          <div className="mt-1 border-t border-zinc-100 px-2.5 pb-1 pt-2.5 dark:border-zinc-800">
+            <div className="mb-1.5 flex items-baseline justify-between gap-2">
+              <label
+                htmlFor={sliderId}
+                className="text-[11px] font-medium tracking-wide text-zinc-400 dark:text-zinc-500"
+              >
+                {t("tools.silenceThreshold")}
+              </label>
+              <span className="text-[11px] font-medium tabular-nums text-zinc-600 dark:text-zinc-300">
+                {threshold.toFixed(1)}s
+              </span>
+            </div>
+            <input
+              id={sliderId}
+              type="range"
+              min={SILENCE_THRESHOLD_MIN}
+              max={SILENCE_THRESHOLD_MAX}
+              step={0.05}
+              value={threshold}
+              onChange={(e) => setThreshold(Number(e.target.value))}
+              // Keep the popover open while dragging the slider.
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-zinc-200 accent-neutral-600 dark:bg-zinc-700 dark:accent-neutral-400"
+            />
+            <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
+              {t("tools.silenceThresholdHelp")}
+            </p>
+          </div>
         </PopoverContent>
       </div>
     </Popover>
