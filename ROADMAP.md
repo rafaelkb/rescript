@@ -21,6 +21,8 @@ User-facing progress for Rescript. Items are marked done when they shipped to
 - [x] Correct misrecognized words (selection → Correct popover; timings redistributed)
 - [x] One-click **Remove fillers** (um / uh / etc.)
 - [x] One-click **Remove silences** (pauses / dead air ≥ 0.3s)
+- [x] User-adjustable **Remove silences** threshold (slider in the Tools menu, persisted)
+- [x] Cuts snap to real audio gaps when text is deleted (no leftover speech fragments)
 - [x] Import your own transcript (SRT / VTT / JSON) instead of running Whisper
 - [x] Import cancel UX (no stuck selector / blocked media drop)
 - [x] Manual speaker controls (rename, change, add, move label, merge, remove)
@@ -39,6 +41,7 @@ User-facing progress for Rescript. Items are marked done when they shipped to
 - [x] Edit audio files (mp3 / wav / m4a / …) the same way as video
 - [x] Audio-only workspace (hide empty video preview; transcript gets full width)
 - [x] Audio export (M4A and additional formats via the export dialog)
+- [x] Built-in audio recording with selectable microphone (upload screen)
 
 ### Timeline editing (Descript-style)
 - [x] Drag word start / end to fix ASR bleed
@@ -72,6 +75,7 @@ User-facing progress for Rescript. Items are marked done when they shipped to
 - [x] Audio: M4A / MP3 / WAV (including from video projects)
 - [x] Transcript: TXT / Markdown / DOCX / PDF (optional timestamps) or SRT / VTT / JSON captions
 - [x] Timeline: Resolve / Premiere XML, Final Cut FCPXML, Pro Tools AAF, Reaper `.rpp`, Samplitude `.edl` (format dropdown)
+- [x] Automatic micro fades at cut points (click-free joins; optional)
 
 ### Desktop & distribution
 - [x] Live web app on GitHub Pages

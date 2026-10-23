@@ -420,6 +420,14 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     setDesktopLocale(resolveDesktopLocale(app.getLocale()));
+    // The upload screen records audio in-page (getUserMedia + MediaRecorder);
+    // Electron denies every permission request unless the main process says
+    // otherwise, so allow the microphone and nothing else.
+    session.defaultSession.setPermissionRequestHandler(
+      (_webContents, permission, callback) => {
+        callback(permission === "media");
+      }
+    );
     if (!isDev) {
       await clearCachesIfUpdated();
       registerAppProtocol();

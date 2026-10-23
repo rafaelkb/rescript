@@ -22,6 +22,7 @@ import ModelSelector, {
   ModelOptionSeparator,
 } from "./ModelSelector";
 import ImportTranscriptOption from "./ImportTranscriptOption";
+import RecordAudio from "./RecordAudio";
 import { MODEL_ORDER } from "@/lib/models";
 import { useMediaEngineSupport } from "@/hooks/useMediaEngineSupport";
 import { detectMediaKind, MEDIA_ACCEPT } from "@/lib/media";
@@ -206,11 +207,9 @@ export default function UploadScreen({
     };
   }, []);
 
-  const handleFiles = useCallback(
-    (files: FileList | null) => {
+  const handleFile = useCallback(
+    (file: File) => {
       if (!ready) return;
-      const file = files?.[0];
-      if (!file) return;
       if (!detectMediaKind(file)) {
         alert(t("editor.chooseMedia"));
         return;
@@ -227,6 +226,14 @@ export default function UploadScreen({
       onFile(file);
     },
     [onFile, ready, t]
+  );
+
+  const handleFiles = useCallback(
+    (files: FileList | null) => {
+      const file = files?.[0];
+      if (file) handleFile(file);
+    },
+    [handleFile]
   );
 
   const handleOpen = useCallback(
@@ -408,6 +415,10 @@ export default function UploadScreen({
               onChange={(e) => handleFiles(e.target.files)}
             />
           </label>
+
+          {ready && (
+            <RecordAudio onFile={handleFile} disabled={!ready} />
+          )}
 
           {/* On desktop the recent list lives in the native File menu instead. */}
           {ready && !isElectron && (

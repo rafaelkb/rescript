@@ -427,6 +427,7 @@ export async function exportVideo(
     withAudio = true,
     format = "mp4",
     resolution = "original",
+    microFades = true,
   }: VideoExportOptions = {}
 ): Promise<Blob> {
   if (keepRanges.length === 0) {
@@ -436,7 +437,12 @@ export async function exportVideo(
   // exports (Discord: "ffmpeg not starting" in the desktop app; browser OK).
   const ffmpeg = await getFFmpeg(exportCoreKind());
   const input = await ensureInput(ffmpeg, file);
-  const plan = buildVideoExport(keepRanges, { withAudio, format, resolution });
+  const plan = buildVideoExport(keepRanges, {
+    withAudio,
+    format,
+    resolution,
+    microFades,
+  });
   return renderPlan(ffmpeg, input, plan, editedDuration, onProgress, "error.videoExport");
 }
 
@@ -449,14 +455,14 @@ export async function exportAudio(
   keepRanges: TimeRange[],
   editedDuration: number,
   onProgress: (ratio: number) => void,
-  { format = "m4a" }: AudioExportOptions = {}
+  { format = "m4a", microFades = true }: AudioExportOptions = {}
 ): Promise<Blob> {
   if (keepRanges.length === 0) {
     throw new Error(en["error.nothingToExport"]);
   }
   const ffmpeg = await getFFmpeg(exportCoreKind());
   const input = await ensureInput(ffmpeg, file);
-  const plan = buildAudioExport(keepRanges, { format });
+  const plan = buildAudioExport(keepRanges, { format, microFades });
   return renderPlan(ffmpeg, input, plan, editedDuration, onProgress, "error.audioExport");
 }
 

@@ -41,8 +41,9 @@ export type MediaExportOptions =
       withAudio: boolean;
       format: VideoExportFormat;
       resolution: VideoExportResolution;
+      microFades: boolean;
     }
-  | { kind: "audio"; format: AudioExportFormat };
+  | { kind: "audio"; format: AudioExportFormat; microFades: boolean };
 
 let reportedProbe = false;
 
@@ -104,9 +105,15 @@ export async function exportMedia(
               withAudio: options.withAudio,
               format: options.format,
               resolution: options.resolution,
+              microFades: options.microFades,
             },
           }
-        : { kind: "audio", keepRanges, editedDuration, options: { format: options.format } };
+        : {
+            kind: "audio",
+            keepRanges,
+            editedDuration,
+            options: { format: options.format, microFades: options.microFades },
+          };
     try {
       return { engine: "native", ...(await nativeRenderExport(file, request, onProgress)) };
     } catch (err) {
@@ -119,11 +126,13 @@ export async function exportMedia(
     options.kind === "audio"
       ? await wasm.exportAudio(file, keepRanges, editedDuration, onProgress, {
           format: options.format,
+          microFades: options.microFades,
         })
       : await wasm.exportVideo(file, keepRanges, editedDuration, onProgress, {
           withAudio: options.withAudio,
           format: options.format,
           resolution: options.resolution,
+          microFades: options.microFades,
         });
   return { engine: "wasm", blob };
 }

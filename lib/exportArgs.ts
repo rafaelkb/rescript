@@ -33,11 +33,26 @@ export interface VideoExportOptions {
   withAudio?: boolean;
   format?: VideoExportFormat;
   resolution?: VideoExportResolution;
+  /**
+   * Fade each kept segment's audio in and out over {@link MICRO_FADE_S}, so
+   * the concatenation points of a cut don't click. Default on.
+   */
+  microFades?: boolean;
 }
 
 export interface AudioExportOptions {
   format?: AudioExportFormat;
+  /** Same micro fades as {@link VideoExportOptions.microFades}. Default on. */
+  microFades?: boolean;
 }
+
+/**
+ * Length of the automatic cut-boundary fades: short enough to be inaudible as
+ * a fade, long enough to smooth the sample discontinuity that makes a cut
+ * click. Applied at every kept segment's edges (including the very start and
+ * end of the render).
+ */
+export const MICRO_FADE_S = 0.005;
 
 /** H.264 encoders an MP4 export can use. */
 export type H264Encoder = "libx264" | "h264_videotoolbox";
@@ -125,6 +140,22 @@ export function defaultExportResolution(
 }
 
 /**
+ * `afade` chain that keeps a kept segment's audio from clicking at its edges.
+ * Fades are clamped to half the segment, so even slivers fade cleanly.
+ */
+function microFadeChain(range: TimeRange, enabled: boolean): string {
+  if (!enabled) return "";
+  const dur = range.end - range.start;
+  if (dur <= 0) return "";
+  const fade = Math.min(MICRO_FADE_S, dur / 2);
+  const outStart = Math.max(0, dur - fade);
+  return (
+    `,afade=t=in:st=0.000:d=${fade.toFixed(3)}` +
+    `,afade=t=out:st=${outStart.toFixed(3)}:d=${fade.toFixed(3)}`
+  );
+}
+
+/**
  * Keep only `keepRanges` of the original media and concatenate them.
  * Re-encodes so cuts land exactly on word boundaries rather than keyframes.
  * `withAudio: false` renders a silent source, whose missing [0:a] would
@@ -132,7 +163,12 @@ export function defaultExportResolution(
  */
 export function buildVideoExport(
   keepRanges: TimeRange[],
-  { withAudio = true, format = "mp4", resolution = "original" }: VideoExportOptions = {},
+  {
+    withAudio = true,
+    format = "mp4",
+    resolution = "original",
+    microFades = true,
+  }: VideoExportOptions = {},
   { x264Preset = "ultrafast", h264Encoder = "libx264" }: EncoderTuning = {}
 ): ExportPlan {
   const scale = scaleFilter(resolution);
@@ -144,7 +180,9 @@ export function buildVideoExport(
     parts.push(`[0:v]trim=start=${s}:end=${e},setpts=PTS-STARTPTS[v${i}]`);
     labels.push(`[v${i}]`);
     if (withAudio) {
-      parts.push(`[0:a]atrim=start=${s}:end=${e},asetpts=PTS-STARTPTS[a${i}]`);
+      parts.push(
+        `[0:a]atrim=start=${s}:end=${e},asetpts=PTS-STARTPTS${microFadeChain(r, microFades)}[a${i}]`
+      );
       labels[labels.length - 1] += `[a${i}]`;
     }
   });
@@ -196,14 +234,16 @@ export function buildVideoExport(
  */
 export function buildAudioExport(
   keepRanges: TimeRange[],
-  { format = "m4a" }: AudioExportOptions = {}
+  { format = "m4a", microFades = true }: AudioExportOptions = {}
 ): ExportPlan {
   const parts: string[] = [];
   const labels: string[] = [];
   keepRanges.forEach((r, i) => {
     const s = r.start.toFixed(3);
     const e = r.end.toFixed(3);
-    parts.push(`[0:a]atrim=start=${s}:end=${e},asetpts=PTS-STARTPTS[a${i}]`);
+    parts.push(
+      `[0:a]atrim=start=${s}:end=${e},asetpts=PTS-STARTPTS${microFadeChain(r, microFades)}[a${i}]`
+    );
     labels.push(`[a${i}]`);
   });
   const filter =
@@ -284,6 +324,9 @@ export function parseExportRequest(value: unknown): ExportRequest | null {
   }
   if (!options || typeof options !== "object") return null;
   const opts = options as Record<string, unknown>;
+  // Absent means on: the fades are automatic, the wire just may override them.
+  const microFades = opts.microFades ?? true;
+  if (typeof microFades !== "boolean") return null;
   if (kind === "video") {
     const { withAudio, format, resolution } = opts;
     if (typeof withAudio !== "boolean") return null;
@@ -297,6 +340,7 @@ export function parseExportRequest(value: unknown): ExportRequest | null {
         withAudio,
         format: format as VideoExportFormat,
         resolution: resolution as VideoExportResolution,
+        microFades,
       },
     };
   }
@@ -305,7 +349,7 @@ export function parseExportRequest(value: unknown): ExportRequest | null {
     kind,
     keepRanges: ranges,
     editedDuration,
-    options: { format: opts.format as AudioExportFormat },
+    options: { format: opts.format as AudioExportFormat, microFades },
   };
 }
 

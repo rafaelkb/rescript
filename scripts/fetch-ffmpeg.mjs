@@ -84,7 +84,7 @@ export const REQUIRED_ENCODERS = [
   "libmp3lame",
   "pcm_s16le",
 ];
-export const REQUIRED_FILTERS = ["trim", "atrim", "concat", "scale"];
+export const REQUIRED_FILTERS = ["trim", "atrim", "concat", "scale", "afade"];
 
 const OS_NAME = { darwin: "mac", win32: "win", linux: "linux" };
 
