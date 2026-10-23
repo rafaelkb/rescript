@@ -89,6 +89,45 @@ export const CUT_FIT_MODES: readonly CutFitMode[] = [
  */
 export const DEFAULT_CUT_FIT_MODE: CutFitMode = "fit";
 
+/** Maximum audio-search distance offered for cut-edge fitting, in seconds. */
+export const CUT_SNAP_DISTANCES = [0.15, 0.35, 0.5, 0.75, 1] as const;
+export const DEFAULT_CUT_SNAP_DISTANCE = 0.35;
+const CUT_SNAP_DISTANCE_STORAGE_KEY = "rescript.cut-snap-distance";
+
+export function clampCutSnapDistance(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_CUT_SNAP_DISTANCE;
+  return CUT_SNAP_DISTANCES.reduce(
+    (closest, distance) =>
+      Math.abs(distance - value) < Math.abs(closest - value) ? distance : closest,
+    CUT_SNAP_DISTANCES[0]
+  );
+}
+
+export function loadCutSnapDistance(): number {
+  if (typeof window === "undefined") return DEFAULT_CUT_SNAP_DISTANCE;
+  try {
+    const raw = window.localStorage.getItem(CUT_SNAP_DISTANCE_STORAGE_KEY);
+    if (raw != null) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) return clampCutSnapDistance(parsed);
+    }
+  } catch {
+    // private mode / disabled storage
+  }
+  return DEFAULT_CUT_SNAP_DISTANCE;
+}
+
+export function saveCutSnapDistance(value: number): number {
+  const clamped = clampCutSnapDistance(value);
+  if (typeof window === "undefined") return clamped;
+  try {
+    window.localStorage.setItem(CUT_SNAP_DISTANCE_STORAGE_KEY, String(clamped));
+  } catch {
+    // private mode / disabled storage
+  }
+  return clamped;
+}
+
 export function isCutFitMode(value: unknown): value is CutFitMode {
   return value === "fit" || value === "gap" || value === "bounds";
 }

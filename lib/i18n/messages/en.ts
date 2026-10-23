@@ -108,6 +108,7 @@ export const en = {
   "player.speed": "Playback speed",
   "player.speedHelp": "Preview only — exports keep the original speed.",
   "player.cutPlacement": "Where cuts land",
+  "player.cutDistance": "Audio search distance",
   "player.cutFit": "Fit inside the silence",
   "player.cutHelpFit": "Cut edges stop inside the pauses around the deleted words, so the neighbouring words keep their first and last milliseconds.",
   "player.cutGap": "Whole pause (centred)",

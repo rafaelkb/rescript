@@ -3,36 +3,15 @@
 import { useId, useState } from "react";
 import { Gauge, Settings2 } from "lucide-react";
 import { useEditorStore } from "@/lib/store";
-import {
-  CUT_FIT_MODES,
-  formatPlaybackRate,
-  PLAYBACK_RATES,
-} from "@/lib/playerPrefs";
+import { formatPlaybackRate, PLAYBACK_RATES } from "@/lib/playerPrefs";
 import { SILENCE_THRESHOLD_MAX, SILENCE_THRESHOLD_MIN } from "@/lib/silences";
-import type { CutFitMode } from "@/lib/cutSnap";
-import type { MessageKey } from "@/lib/i18n";
 import Popover, { PopoverContent, PopoverTrigger } from "./Popover";
 import { useI18n } from "./I18nProvider";
 
-/** Copy for each cut-placement mode. */
-const CUT_COPY: Record<
-  CutFitMode,
-  { labelKey: MessageKey; helpKey: MessageKey }
-> = {
-  fit: { labelKey: "player.cutFit", helpKey: "player.cutHelpFit" },
-  gap: { labelKey: "player.cutGap", helpKey: "player.cutHelpGap" },
-  bounds: { labelKey: "player.cutBounds", helpKey: "player.cutHelpBounds" },
-};
-
-/** The modes in the order {@link CUT_FIT_MODES} offers them. */
-const CUT_MODES = CUT_FIT_MODES.map((mode) => ({ mode, ...CUT_COPY[mode] }));
-
 /**
- * The player's own settings, opened from the transport bar: preview speed, how
- * text deletions place their cuts, and the two edit preferences that used to
- * live only in other menus (the silence threshold from Tools, micro fades from
- * Export). All of them read and write the store, so every surface that shows a
- * preference stays in sync with the rest.
+ * Miscellaneous player preferences: preview speed, silence threshold, and
+ * micro fades. Cut placement and audio-search distance are shown directly in
+ * the toolbar so they stay visible while editing.
  */
 export default function PlayerSettingsMenu() {
   const { t } = useI18n();
@@ -42,14 +21,10 @@ export default function PlayerSettingsMenu() {
 
   const playbackRate = useEditorStore((s) => s.playbackRate);
   const setPlaybackRate = useEditorStore((s) => s.setPlaybackRate);
-  const cutFitMode = useEditorStore((s) => s.cutFitMode);
-  const setCutFitMode = useEditorStore((s) => s.setCutFitMode);
   const silenceThreshold = useEditorStore((s) => s.silenceThreshold);
   const setSilenceThreshold = useEditorStore((s) => s.setSilenceThreshold);
   const microFades = useEditorStore((s) => s.microFades);
   const setMicroFades = useEditorStore((s) => s.setMicroFades);
-
-  const activeHelp = CUT_MODES.find((m) => m.mode === cutFitMode) ?? CUT_MODES[0];
 
   return (
     <Popover open={open} onOpenChange={setOpen} placement="top-end" backdrop>
@@ -103,45 +78,6 @@ export default function PlayerSettingsMenu() {
             </div>
             <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
               {t("player.speedHelp")}
-            </p>
-          </section>
-
-          <section className="border-b border-zinc-100 px-3 py-2.5 dark:border-zinc-800">
-            <p className="mb-2 text-[11px] font-medium tracking-wide text-zinc-400 dark:text-zinc-500">
-              {t("player.cutPlacement")}
-            </p>
-            <div role="radiogroup" aria-label={t("player.cutPlacement")}>
-              {CUT_MODES.map((option) => (
-                <button
-                  key={option.mode}
-                  type="button"
-                  role="radio"
-                  aria-checked={option.mode === cutFitMode}
-                  onClick={() => setCutFitMode(option.mode)}
-                  className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition ${
-                    option.mode === cutFitMode
-                      ? "bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-                      : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
-                  }`}
-                >
-                  <span
-                    aria-hidden
-                    className={`flex h-3 w-3 shrink-0 items-center justify-center rounded-full border ${
-                      option.mode === cutFitMode
-                        ? "border-zinc-700 dark:border-zinc-300"
-                        : "border-zinc-300 dark:border-zinc-600"
-                    }`}
-                  >
-                    {option.mode === cutFitMode && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-zinc-700 dark:bg-zinc-300" />
-                    )}
-                  </span>
-                  {t(option.labelKey)}
-                </button>
-              ))}
-            </div>
-            <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
-              {t(activeHelp.helpKey)}
             </p>
           </section>
 

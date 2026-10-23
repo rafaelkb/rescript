@@ -107,6 +107,7 @@ export const ja: Record<MessageKey, string> = {
   "player.speed": "再生速度",
   "player.speedHelp": "プレビューのみ — 書き出しは元の速度のままです。",
   "player.cutPlacement": "カット位置",
+  "player.cutDistance": "音声検索範囲",
   "player.cutFit": "無音内に収める",
   "player.cutHelpFit": "カット端は削除した単語の周りの無音内に収まるので、隣の単語の最初と最後のミリ秒は残ります。",
   "player.cutGap": "無音全体（中央）",

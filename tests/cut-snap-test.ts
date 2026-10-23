@@ -302,6 +302,34 @@ function w(
 }
 
 {
+  // The user's audio-search distance controls how far a cut edge may look for
+  // a pause: the short radius misses this one, while the wider radius finds it.
+  const peaks = peaksFrom(
+    [
+      [0.8, 1.35, 0.8],
+      [1.42, 2.05, 0.8],
+      [2.15, 2.6, 0.8],
+    ],
+    3
+  );
+  const nearCut = snapCutBoundsToAudio(
+    peaks,
+    { start: 1.5, end: 2.0 },
+    { lo: 1.35, hi: 2.15 },
+    { mode: "fit", duration: 3, maxSnapS: 0.1 }
+  );
+  const farCut = snapCutBoundsToAudio(
+    peaks,
+    { start: 1.5, end: 2.0 },
+    { lo: 1.35, hi: 2.15 },
+    { mode: "fit", duration: 3, maxSnapS: 0.35 }
+  );
+  near(nearCut.start, 1.5, 1e-6, "short audio-search distance leaves edge");
+  assert(farCut.start < 1.5, "wider audio-search distance reaches the pause");
+  console.log("audio cut-search distance controls snapping: ok");
+}
+
+{
   // Contiguous speech (no pause to fit into): the ASR bounds stand.
   const n = Math.round(3 * SR);
   const audio = new Float32Array(n);

@@ -36,6 +36,9 @@ import {
   trimEdgeBounds,
 } from "@/lib/edits";
 import type { ClipSegment, Word } from "@/lib/types";
+import { CUT_FIT_MODES, CUT_SNAP_DISTANCES } from "@/lib/playerPrefs";
+import type { CutFitMode } from "@/lib/cutSnap";
+import type { MessageKey } from "@/lib/i18n";
 import { isDisfluencyPlaceholder } from "@/lib/disfluencies";
 import { VAD_SAMPLE_RATE } from "@/lib/vad";
 import { peakBetween } from "@/lib/waveform";
@@ -62,6 +65,16 @@ const SPLIT_HOVER_PX = 10;
 /** Inset + radius for selected clip/cut outlines (`rounded-sm` ≈ 2px). */
 const SELECTION_INSET = 2;
 const SELECTION_RADIUS = 2;
+const CUT_MODE_LABELS: Record<CutFitMode, MessageKey> = {
+  fit: "player.cutFit",
+  gap: "player.cutGap",
+  bounds: "player.cutBounds",
+};
+const CUT_MODE_HELP: Record<CutFitMode, MessageKey> = {
+  fit: "player.cutHelpFit",
+  gap: "player.cutHelpGap",
+  bounds: "player.cutHelpBounds",
+};
 
 /** Canvas path for a rounded rect (used to keep cut fills inside the selection ring). */
 function roundRectPath(
@@ -108,6 +121,10 @@ export default function Timeline() {
   const selectedCutIndex = useEditorStore((s) => s.selectedCutIndex);
   const selectedWordIds = useEditorStore((s) => s.selectedWordIds);
   const status = useEditorStore((s) => s.status);
+  const cutFitMode = useEditorStore((s) => s.cutFitMode);
+  const cutSnapDistance = useEditorStore((s) => s.cutSnapDistance);
+  const setCutFitMode = useEditorStore((s) => s.setCutFitMode);
+  const setCutSnapDistance = useEditorStore((s) => s.setCutSnapDistance);
 
   const cuts = useCutRanges();
   const keeps = useMemo(() => getKeepRanges(cuts, duration), [cuts, duration]);
@@ -172,15 +189,41 @@ export default function Timeline() {
   const zoomRef = useRef(zoom);
   const widthRef = useRef(width);
   const durationRef = useRef(duration);
+  const currentTimeRef = useRef(currentTime);
+  const userScrolledRef = useRef(false);
+  // Scroll position to apply after a zoom re-renders the track width.
+  const pendingScrollRef = useRef<number | null>(null);
+  const zoomTo = useCallback((nextZoom: number) => {
+    const el = scrollRef.current;
+    const curPps = ppsRef.current;
+    const viewWidth = widthRef.current;
+    const playheadX = currentTimeRef.current * curPps - (el?.scrollLeft ?? 0);
+    // Preserve the playhead's screen position when visible; bring it to center
+    // when it is offscreen so every zoom remains focused on the playhead.
+    const anchorX = playheadX >= 0 && playheadX <= viewWidth
+      ? playheadX
+      : viewWidth / 2;
+    const fit =
+      viewWidth > 0 && durationRef.current > 0
+        ? viewWidth / durationRef.current
+        : 50;
+    const nextPps = fit * nextZoom;
+    pendingScrollRef.current = Math.max(
+      0,
+      currentTimeRef.current * nextPps - anchorX
+    );
+    userScrolledRef.current = true;
+    setZoom(nextZoom);
+  }, []);
+  const zoomToRef = useRef(zoomTo);
   useEffect(() => {
     ppsRef.current = pps;
     zoomRef.current = zoom;
     widthRef.current = width;
     durationRef.current = duration;
+    currentTimeRef.current = currentTime;
+    zoomToRef.current = zoomTo;
   });
-
-  // Scroll position to apply after a wheel-zoom re-renders the track width.
-  const pendingScrollRef = useRef<number | null>(null);
 
   useEffect(() => {
     const el = outerRef.current;
@@ -356,7 +399,6 @@ export default function Timeline() {
 
   // Panning or zooming during playback hands the window to the user until the
   // next play/pause: `scrollLeft` the follow effect did not write is theirs.
-  const userScrolledRef = useRef(false);
   const autoScrollRef = useRef<number | null>(null);
   useEffect(() => {
     userScrolledRef.current = false;
@@ -374,7 +416,7 @@ export default function Timeline() {
     }
   }, [currentTime, playing, pps, width]);
 
-  // Vertical wheel / pinch zooms (anchored at the pointer); horizontal
+  // Vertical wheel / pinch zooms stay anchored on the playhead; horizontal
   // trackpad side-scroll pans via native overflow-x. Non-passive so zoom
   // can preventDefault.
   useEffect(() => {
@@ -386,23 +428,12 @@ export default function Timeline() {
       if (!e.ctrlKey && Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       e.preventDefault();
       const curZoom = zoomRef.current;
-      const curPps = ppsRef.current;
-      if (curPps <= 0) return;
-      const rect = el.getBoundingClientRect();
-      const pointerX = e.clientX - rect.left;
-      const tAnchor = (el.scrollLeft + pointerX) / curPps;
       const nextZoom = Math.min(
         MAX_ZOOM,
         Math.max(MIN_ZOOM, curZoom * Math.exp(-e.deltaY * ZOOM_SPEED))
       );
       if (nextZoom === curZoom) return;
-      const fit =
-        widthRef.current > 0 && durationRef.current > 0
-          ? widthRef.current / durationRef.current
-          : 50;
-      const nextPps = fit * nextZoom;
-      pendingScrollRef.current = Math.max(0, tAnchor * nextPps - pointerX);
-      setZoom(nextZoom);
+      zoomToRef.current(nextZoom);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -606,7 +637,7 @@ export default function Timeline() {
   const showHandles = pps >= HANDLE_VIS_PPS;
 
   return (
-    <footer className="flex h-48 shrink-0 flex-col border-t border-zinc-200 bg-white sm:h-52 dark:border-zinc-800 dark:bg-zinc-900">
+    <footer className="flex h-56 shrink-0 flex-col border-t border-zinc-200 bg-white sm:h-60 dark:border-zinc-800 dark:bg-zinc-900">
       {/* Mobile wraps the transport onto its own row; from `sm` up it is
           absolutely centred so it stays put as the side groups change width. */}
       <div className="relative flex shrink-0 flex-wrap items-center gap-x-2 border-b border-zinc-100 px-2.5 sm:h-10 sm:flex-nowrap dark:border-zinc-800">
@@ -764,7 +795,7 @@ export default function Timeline() {
           <div className="flex items-center gap-0.5">
             <button
               type="button"
-              onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z / 1.5))}
+              onClick={() => zoomTo(Math.max(MIN_ZOOM, zoom / 1.5))}
               disabled={zoom <= MIN_ZOOM}
               title={t("timeline.zoomOut")}
               className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 dark:disabled:text-zinc-600"
@@ -773,7 +804,7 @@ export default function Timeline() {
             </button>
             <button
               type="button"
-              onClick={() => setZoom(1)}
+              onClick={() => zoomTo(1)}
               disabled={zoom === 1}
               title={t("timeline.fit")}
               className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 dark:disabled:text-zinc-600"
@@ -782,7 +813,7 @@ export default function Timeline() {
             </button>
             <button
               type="button"
-              onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 1.5))}
+              onClick={() => zoomTo(Math.min(MAX_ZOOM, zoom * 1.5))}
               disabled={zoom >= MAX_ZOOM}
               title={t("timeline.zoomIn")}
               className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 dark:disabled:text-zinc-600"
@@ -796,6 +827,64 @@ export default function Timeline() {
           {/* Player settings: preview speed, cut placement, silence threshold,
               micro fades — the same prefs the Tools and Export menus show. */}
           <PlayerSettingsMenu />
+        </div>
+      </div>
+
+      {/* Cut behavior stays visible in the player toolbar instead of being hidden
+          in the small settings popover. */}
+      <div className="flex h-9 shrink-0 items-center gap-2 overflow-x-auto border-b border-zinc-100 px-2.5 dark:border-zinc-800">
+        <span className="shrink-0 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+          {t("player.cutPlacement")}
+        </span>
+        <div
+          className="flex shrink-0 items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
+          role="radiogroup"
+          aria-label={t("player.cutPlacement")}
+        >
+          {CUT_FIT_MODES.map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              role="radio"
+              aria-checked={mode === cutFitMode}
+              title={`${t(CUT_MODE_LABELS[mode])} — ${t(CUT_MODE_HELP[mode])}`}
+              onClick={() => setCutFitMode(mode)}
+              className={`shrink-0 cursor-pointer rounded-md px-2 py-1 text-[10px] font-medium transition ${
+                mode === cutFitMode
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-50"
+                  : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+              }`}
+            >
+              {t(CUT_MODE_LABELS[mode])}
+            </button>
+          ))}
+        </div>
+        <span className="mx-0.5 h-4 w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />
+        <span className="shrink-0 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+          {t("player.cutDistance")}
+        </span>
+        <div
+          className="flex shrink-0 items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
+          role="radiogroup"
+          aria-label={t("player.cutDistance")}
+        >
+          {CUT_SNAP_DISTANCES.map((distance) => (
+            <button
+              key={distance}
+              type="button"
+              role="radio"
+              aria-checked={distance === cutSnapDistance}
+              title={`${t("player.cutDistance")}: ±${distance}s`}
+              onClick={() => setCutSnapDistance(distance)}
+              className={`shrink-0 cursor-pointer rounded-md px-2 py-1 text-[10px] font-medium tabular-nums transition ${
+                distance === cutSnapDistance
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-50"
+                  : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+              }`}
+            >
+              {distance}s
+            </button>
+          ))}
         </div>
       </div>
 
