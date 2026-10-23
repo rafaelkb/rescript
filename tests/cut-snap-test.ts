@@ -377,4 +377,182 @@ function w(
   console.log("deletion snapping honours fit mode: ok");
 }
 
+{
+  // Start and end thresholds independently slide the cut between the deleted
+  // word (0%) and the neighboring kept words (100%).
+  const peaks = peaksFrom(
+    [
+      [0.6, 1.0, 0.8], // previous kept word ends at 1.0
+      [1.2, 1.8, 0.8], // deleted word [1.2, 1.8]
+      [2.0, 2.5, 0.8], // next kept word starts at 2.0
+    ],
+    3
+  );
+  const words0 = [w(1, 0.6, 1.0), w(2, 1.25, 1.75, true), w(3, 2.0, 2.5)];
+  const tight = snapDeletionCutPoints(words0, [2], peaks, 3, {
+    mode: "fit",
+    startThreshold: 0,
+    endThreshold: 0,
+  });
+  const mid = snapDeletionCutPoints(words0, [2], peaks, 3, {
+    mode: "fit",
+    startThreshold: 0.5,
+    endThreshold: 0.5,
+  });
+  const wide = snapDeletionCutPoints(words0, [2], peaks, 3, {
+    mode: "fit",
+    startThreshold: 1,
+    endThreshold: 1,
+  });
+  assert(
+    wide[1]!.start < mid[1]!.start && mid[1]!.start < tight[1]!.start,
+    `start moves monotonically toward kept word: ${wide[1]!.start} < ${mid[1]!.start} < ${tight[1]!.start}`
+  );
+  assert(
+    tight[1]!.end < mid[1]!.end && mid[1]!.end < wide[1]!.end,
+    `end moves monotonically toward kept word: ${tight[1]!.end} < ${mid[1]!.end} < ${wide[1]!.end}`
+  );
+  assert(wide[1]!.start > 1.0, `100% start still keeps word 1 (${wide[1]!.start})`);
+  assert(wide[1]!.end < 2.0, `100% end still keeps word 3 (${wide[1]!.end})`);
+
+  // Asymmetric thresholds: start at 100%, end at 0%.
+  const asym = snapDeletionCutPoints(words0, [2], peaks, 3, {
+    mode: "fit",
+    startThreshold: 1,
+    endThreshold: 0,
+  });
+  near(asym[1]!.start, wide[1]!.start, 1e-6, "asymmetric start matches 100%");
+  near(asym[1]!.end, tight[1]!.end, 1e-6, "asymmetric end matches 0%");
+  console.log("start and end thresholds adjust cuts independently: ok");
+}
+
+{
+  // Soft fricative onset/offset (/s/, /f/, /h/ around 20% of vowel peak) next
+  // to true silence: inner-core sharpening excludes the consonant from the
+  // pause so no speech sound is left behind at either cut edge.
+  const peaks = peaksFrom(
+    [
+      [0.6, 1.0, 0.8], // kept word 1
+      [1.0, 1.08, 0.01], // true room silence before deleted word
+      [1.08, 1.2, 0.18], // deleted word's quiet /s/ onset
+      [1.2, 1.75, 0.8], // deleted word's loud vowel
+      [1.75, 1.88, 0.18], // deleted word's quiet /s/ release
+      [1.88, 1.98, 0.01], // true room silence after deleted word
+      [1.98, 2.5, 0.8], // kept word 3
+    ],
+    3
+  );
+  const words = [w(1, 0.6, 1.0), w(2, 1.18, 1.77, true), w(3, 1.98, 2.5)];
+  const out = snapDeletionCutPoints(words, [2], peaks, 3, {
+    mode: "fit",
+    startThreshold: 0.5,
+    endThreshold: 0.5,
+  });
+  assert(
+    out[1]!.start < 1.08,
+    `cut start ${out[1]!.start} swallows quiet /s/ onset at 1.08`
+  );
+  assert(
+    out[1]!.start > 1.0,
+    `cut start ${out[1]!.start} stays after kept word 1`
+  );
+  assert(
+    out[1]!.end > 1.88,
+    `cut end ${out[1]!.end} swallows quiet /s/ tail ending at 1.88`
+  );
+  assert(
+    out[1]!.end < 1.98,
+    `cut end ${out[1]!.end} stops before kept word 3`
+  );
+  console.log("soft consonant onsets and tails are swallowed cleanly: ok");
+}
+
+{
+  // Fast coarticulated speech with a brief 20 ms stop-closure valley (< 30 ms)
+  // between touching words: positive thresholds pull the cut into the valley.
+  const peaks = peaksFrom(
+    [
+      [0.8, 1.18, 0.8], // kept word 1's vowel
+      [1.18, 1.2, 0.08], // 20 ms stop closure between words
+      [1.2, 1.7, 0.8], // deleted word's speech (CTC split landed late at 1.24)
+      [1.8, 2.3, 0.8], // kept word 3
+    ],
+    3
+  );
+  const words = [w(1, 0.8, 1.24), w(2, 1.24, 1.7, true), w(3, 1.8, 2.3)];
+  const out = snapDeletionCutPoints(words, [2], peaks, 3, {
+    mode: "fit",
+    startThreshold: 1,
+    endThreshold: 0.5,
+  });
+  assert(
+    out[1]!.start <= 1.2,
+    `coarticulated start ${out[1]!.start} reaches the stop-closure valley`
+  );
+  assert(
+    out[1]!.start >= 1.18,
+    `coarticulated start ${out[1]!.start} does not eat word 1`
+  );
+  console.log("coarticulated stop-closure valley is respected: ok");
+}
+
+{
+  // Short kept neighbor word ("I" = 150 ms) after an earlier pause, followed
+  // immediately by a deleted word with no pause between them: snapping must
+  // never jump over the kept word into the pause before it.
+  const peaks = peaksFrom(
+    [
+      [0.5, 1.0, 0.8],
+      [1.0, 1.2, 0.0], // pause BEFORE kept word "I"
+      [1.2, 1.8, 0.8], // "I" [1.2, 1.35] + deleted word [1.35, 1.8] contiguous
+      [1.9, 2.4, 0.8],
+    ],
+    3
+  );
+  const words = [
+    w(1, 0.5, 1.0),
+    w(2, 1.2, 1.35), // short kept word "I"
+    w(3, 1.35, 1.8, true), // deleted word
+    w(4, 1.9, 2.4),
+  ];
+  const out = snapDeletionCutPoints(words, [3], peaks, 3, {
+    mode: "fit",
+    maxSnapS: 0.75,
+    startThreshold: 1,
+    endThreshold: 0.5,
+  });
+  assert(
+    out[2]!.start >= 1.275,
+    `cut start ${out[2]!.start} never jumps across short kept word [1.2, 1.35]`
+  );
+  console.log("short neighboring kept words are never jumped across: ok");
+}
+
+{
+  // "gap" mode also honours startThreshold and endThreshold across the gap.
+  const peaks = peaksFrom(
+    [
+      [1.0, 1.35, 0.8],
+      [1.5, 2.0, 0.8],
+      [2.15, 2.6, 0.8],
+    ],
+    3
+  );
+  const gapLow = snapCutBoundsToAudio(
+    peaks,
+    { start: 1.5, end: 2.0 },
+    { lo: 1.35, hi: 2.15 },
+    { mode: "gap", startThreshold: 0.2, endThreshold: 0.2 }
+  );
+  const gapHigh = snapCutBoundsToAudio(
+    peaks,
+    { start: 1.5, end: 2.0 },
+    { lo: 1.35, hi: 2.15 },
+    { mode: "gap", startThreshold: 0.8, endThreshold: 0.8 }
+  );
+  assert(gapHigh.start < gapLow.start, "gap mode start follows threshold");
+  assert(gapHigh.end > gapLow.end, "gap mode end follows threshold");
+  console.log("gap mode honours start and end thresholds: ok");
+}
+
 console.log("ALL CUT SNAP TESTS PASSED");

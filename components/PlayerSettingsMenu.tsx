@@ -10,8 +10,8 @@ import { useI18n } from "./I18nProvider";
 
 /**
  * Miscellaneous player preferences: preview speed, silence threshold, and
- * micro fades. Cut placement and audio-search distance are shown directly in
- * the toolbar so they stay visible while editing.
+ * micro fades. Word-deletion cut options live in their own {@link CutOptionsMenu}
+ * beside this trigger in the timeline toolbar.
  */
 export default function PlayerSettingsMenu() {
   const { t } = useI18n();

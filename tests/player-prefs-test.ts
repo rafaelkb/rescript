@@ -5,15 +5,27 @@
  */
 import {
   CUT_FIT_MODES,
+  DEFAULT_CUT_END_THRESHOLD,
   DEFAULT_CUT_FIT_MODE,
+  DEFAULT_CUT_SNAP_DISTANCE,
+  DEFAULT_CUT_START_THRESHOLD,
   DEFAULT_PLAYBACK_RATE,
   PLAYBACK_RATES,
+  clampCutEdgeThreshold,
+  clampCutSnapDistance,
   clampPlaybackRate,
+  formatCutEdgeThreshold,
   formatPlaybackRate,
   isCutFitMode,
+  loadCutEndThreshold,
   loadCutFitMode,
+  loadCutSnapDistance,
+  loadCutStartThreshold,
   loadPlaybackRate,
+  saveCutEndThreshold,
   saveCutFitMode,
+  saveCutSnapDistance,
+  saveCutStartThreshold,
   savePlaybackRate,
 } from "../lib/playerPrefs";
 
@@ -70,5 +82,48 @@ assert(saveCutFitMode("gap") === "gap", "save returns the mode");
 assert(loadCutFitMode() === "gap", "mode survives a reload");
 memory.set("rescript.cut-fit", "nonsense");
 assert(loadCutFitMode() === DEFAULT_CUT_FIT_MODE, "garbage mode falls back");
+
+// Cut snap distance.
+assert(loadCutSnapDistance() === DEFAULT_CUT_SNAP_DISTANCE, "default cut distance");
+assert(clampCutSnapDistance(0.49) === 0.5, "distance snaps to nearest offered");
+assert(saveCutSnapDistance(0.75) === 0.75, "save distance returns value");
+assert(loadCutSnapDistance() === 0.75, "distance survives reload");
+
+// Start and end word-cut thresholds.
+assert(
+  loadCutStartThreshold() === DEFAULT_CUT_START_THRESHOLD,
+  "default start threshold is 0.5"
+);
+assert(
+  loadCutEndThreshold() === DEFAULT_CUT_END_THRESHOLD,
+  "default end threshold is 0.5"
+);
+assert(DEFAULT_CUT_START_THRESHOLD === 0.5, "start default is 50%");
+assert(DEFAULT_CUT_END_THRESHOLD === 0.5, "end default is 50%");
+assert(clampCutEdgeThreshold(0) === 0, "0% kept");
+assert(clampCutEdgeThreshold(1) === 1, "100% kept");
+assert(clampCutEdgeThreshold(-0.5) === 0, "negative clamps to 0");
+assert(clampCutEdgeThreshold(1.8) === 1, "above 1 clamps to 1");
+assert(
+  clampCutEdgeThreshold(Number.NaN) === DEFAULT_CUT_START_THRESHOLD,
+  "NaN threshold falls back"
+);
+assert(formatCutEdgeThreshold(0) === "0%", "0% label");
+assert(formatCutEdgeThreshold(0.5) === "50%", "50% label");
+assert(formatCutEdgeThreshold(1) === "100%", "100% label");
+assert(saveCutStartThreshold(0.8) === 0.8, "save start threshold");
+assert(saveCutEndThreshold(0.25) === 0.25, "save end threshold");
+assert(loadCutStartThreshold() === 0.8, "start threshold survives reload");
+assert(loadCutEndThreshold() === 0.25, "end threshold survives reload");
+memory.set("rescript.cut-start-threshold", "");
+memory.set("rescript.cut-end-threshold", "not-a-number");
+assert(
+  loadCutStartThreshold() === DEFAULT_CUT_START_THRESHOLD,
+  "empty start threshold falls back"
+);
+assert(
+  loadCutEndThreshold() === DEFAULT_CUT_END_THRESHOLD,
+  "garbage end threshold falls back"
+);
 
 console.log("ALL PLAYER PREFS TESTS PASSED");

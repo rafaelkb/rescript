@@ -24,6 +24,7 @@ User-facing progress for Rescript. Items are marked done when they shipped to
 - [x] User-adjustable **Remove silences** threshold (slider in the Tools menu, persisted)
 - [x] Cuts snap to real audio gaps when text is deleted (no leftover speech fragments)
 - [x] Cut placement setting: fit inside the silence (default), whole pause, or exact word timings
+- [x] Cut options menu with adjustable start and end word-cut thresholds between deleted and kept words
 - [x] Import your own transcript (SRT / VTT / JSON) instead of running Whisper
 - [x] Import cancel UX (no stuck selector / blocked media drop)
 - [x] Manual speaker controls (rename, change, add, move label, merge, remove)
