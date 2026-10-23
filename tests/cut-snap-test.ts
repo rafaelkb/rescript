@@ -209,4 +209,144 @@ function w(
   console.log("interior deletions leave edges alone: ok");
 }
 
+{
+  // The complaint this mode fixes: the deleted word's bound runs past the next
+  // word's audible onset, so the cut takes the beginning of that word with it.
+  // "gap" only ever searches outward, so it cannot pull the edge back. "fit"
+  // finds the pause in the envelope and stops before the word starts.
+  const peaks = peaksFrom(
+    [
+      [1.2, 1.85, 0.8], // deleted word's speech
+      [2.0, 2.6, 0.8], // next kept word's speech (audible from 2.0)
+    ],
+    3
+  );
+  const range = { start: 1.5, end: 2.05 }; // loose end: 50 ms into the next word
+  const bounds = { lo: 1.2, hi: 2.1 };
+  const gapMode = snapCutBoundsToAudio(peaks, range, bounds, { mode: "gap" });
+  const fitMode = snapCutBoundsToAudio(peaks, range, bounds, {
+    mode: "fit",
+    duration: 3,
+  });
+  assert(
+    gapMode.end > 2.0,
+    `gap mode lands inside the next word (${gapMode.end})`
+  );
+  assert(fitMode.end <= 2.0, `fit mode keeps the next word's start (${fitMode.end})`);
+  near(fitMode.end, 1.98, 0.02, "fit end stops just short of the next speech");
+  console.log("fit mode protects the next word's beginning: ok");
+}
+
+{
+  // Loose deletion bounds that already run past the next word's onset: fit mode
+  // pulls the edge back into the pause instead of trusting the timestamp.
+  const peaks = peaksFrom(
+    [
+      [1.2, 1.8, 0.8],
+      [1.9, 2.6, 0.8],
+    ],
+    3
+  );
+  const fit = snapCutBoundsToAudio(
+    peaks,
+    { start: 1.5, end: 2.1 },
+    { lo: 1.2, hi: 2.4 },
+    { mode: "fit", duration: 3 }
+  );
+  near(fit.end, 1.88, 0.02, "fit pulls a loose end back into the pause");
+  assert(fit.end < 2.1, "loose end shrinks");
+  console.log("fit mode trims loose bounds: ok");
+}
+
+{
+  // Fit mode still swallows the deleted word's own bleed: it crosses the loud
+  // tail, then stops on the far side of the pause, before the next word.
+  const peaks = peaksFrom(
+    [
+      [1.2, 1.98, 0.8], // deleted word, audible past its end timestamp
+      [2.1, 2.6, 0.8],
+    ],
+    3
+  );
+  const fit = snapCutBoundsToAudio(
+    peaks,
+    { start: 1.5, end: 1.95 },
+    { lo: 1.2, hi: 2.02 },
+    { mode: "fit", duration: 3 }
+  );
+  assert(fit.end > 1.98, `fit end crosses the bleed (${fit.end})`);
+  assert(fit.end < 2.1, `fit end stays out of the next word (${fit.end})`);
+  near(fit.end, 2.0, 0.02, "fit end lands inside the pause");
+  console.log("fit mode fills the pause: ok");
+}
+
+{
+  // Same for the leading edge: the previous word's audio runs past its
+  // timestamp, so the cut starts after the audio stops — not at the timestamp.
+  const peaks = peaksFrom(
+    [
+      [0.6, 1.05, 0.8], // previous kept word, audible until 1.05
+      [1.15, 2.0, 0.8], // deleted word
+    ],
+    3
+  );
+  const fit = snapCutBoundsToAudio(
+    peaks,
+    { start: 1.18, end: 1.9 },
+    { lo: 1.0, hi: 2.0 },
+    { mode: "fit", duration: 3 }
+  );
+  assert(fit.start >= 1.05, `fit start keeps the previous word (${fit.start})`);
+  near(fit.start, 1.13, 0.02, "fit start sits just inside the pause");
+  console.log("fit mode protects the previous word's end: ok");
+}
+
+{
+  // Contiguous speech (no pause to fit into): the ASR bounds stand.
+  const n = Math.round(3 * SR);
+  const audio = new Float32Array(n);
+  for (let i = 0; i < n; i++) audio[i] = 0.5;
+  const peaks = buildWaveformPeaks(audio);
+  const fit = snapCutBoundsToAudio(
+    peaks,
+    { start: 1.5, end: 2.0 },
+    { lo: 1.0, hi: 2.5 },
+    { mode: "fit", duration: 3 }
+  );
+  near(fit.start, 1.5, 1e-6, "no-pause fit start unchanged");
+  near(fit.end, 2.0, 1e-6, "no-pause fit end unchanged");
+  console.log("fit mode leaves contiguous speech alone: ok");
+}
+
+{
+  // "bounds" mode: no analysis at all.
+  const peaks = peaksFrom([[1.42, 2.05, 0.8]], 3);
+  const out = snapCutBoundsToAudio(
+    peaks,
+    { start: 1.5, end: 2.0 },
+    { lo: 1.35, hi: 2.3 },
+    { mode: "bounds" }
+  );
+  near(out.start, 1.5, 1e-6, "bounds mode start");
+  near(out.end, 2.0, 1e-6, "bounds mode end");
+  console.log("bounds mode is a passthrough: ok");
+}
+
+{
+  // The store asks for "fit" by default; the deletion pipeline honours it.
+  const peaks = peaksFrom(
+    [
+      [1.0, 1.35, 0.8],
+      [1.42, 2.0, 0.8],
+      [2.06, 2.6, 0.8],
+    ],
+    3.5
+  );
+  const words = [w(1, 1.0, 1.35), w(2, 1.5, 1.95, true), w(3, 2.05, 2.5)];
+  const out = snapDeletionCutPoints(words, [2], peaks, 3.5, { mode: "fit" });
+  assert(out[1]!.end < 2.05, `fit deletion end ${out[1]!.end} keeps word 3`);
+  assert(out[1]!.end > 1.95, `fit deletion end ${out[1]!.end} crosses the bleed`);
+  console.log("deletion snapping honours fit mode: ok");
+}
+
 console.log("ALL CUT SNAP TESTS PASSED");

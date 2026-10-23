@@ -42,7 +42,8 @@ builds auto-update from GitHub Releases. Prefer the browser? Use the
 - 🎯 **Word timing** — zoom in and drag a word's edges when ASR alignment is off
 - 🔴 **Cut edges** — drag either edge of a cut to trim independently of Whisper
   timestamps; double-click to reset
-- ⚡ **Live preview** — playback skips your cuts in real time
+- ⚡ **Live preview** — playback skips your cuts in real time, at 0.5×–3× speed
+- ⚙️ **Player settings** — speed, where text-deletion cuts land, silence threshold, and micro fades, from the transport bar
 - 📦 **In-browser / desktop export** — frame-accurate re-encode with ffmpeg.wasm
 - 🎞️ **NLE / DAW timeline export** — DaVinci Resolve / Premiere XML, Final Cut FCPXML, Pro Tools/Logic AAF, Reaper `.rpp`, Samplitude `.edl`
 - 🎧 **Audio files** — edit podcasts, voice notes, and interviews the same way as video

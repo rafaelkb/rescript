@@ -20,10 +20,6 @@ import {
   type VideoExportFormat,
   type VideoExportResolution,
 } from "@/lib/exportArgs";
-import {
-  loadMicroFadesPreference,
-  saveMicroFadesPreference,
-} from "@/lib/exportPrefs";
 import { activeMediaEngine, exportMedia, type MediaEngine } from "@/lib/mediaEngine";
 import {
   discardNativeExport,
@@ -139,10 +135,10 @@ export default function ExportDialog() {
     pickedResolution ??
     defaultExportResolution(sourceVideo?.videoWidth ?? 0, sourceVideo?.videoHeight ?? 0);
   const [audioFormat, setAudioFormat] = useState<AudioExportFormat>("m4a");
-  // Micro fades smooth the audio at cut points; on by default, remembered.
-  const [microFades, setMicroFadesState] = useState(() =>
-    loadMicroFadesPreference()
-  );
+  // Micro fades smooth the audio at cut points; on by default, remembered and
+  // shared with the player settings (the store owns the preference).
+  const microFades = useEditorStore((s) => s.microFades);
+  const setMicroFadesPref = useEditorStore((s) => s.setMicroFades);
   const [textFormat, setTextFormat] = useState<TranscriptFormat>("txt");
   const [includeTimestamps, setIncludeTimestamps] = useState(false);
   const [shortCues, setShortCues] = useState(true);
@@ -253,11 +249,10 @@ export default function ExportDialog() {
 
   const setMicroFades = useCallback(
     (value: boolean) => {
-      saveMicroFadesPreference(value);
-      setMicroFadesState(value);
+      setMicroFadesPref(value);
       clearMediaExport();
     },
-    [clearMediaExport]
+    [clearMediaExport, setMicroFadesPref]
   );
 
   const startMediaExport = useCallback(async () => {
