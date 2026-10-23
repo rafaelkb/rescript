@@ -36,14 +36,12 @@ import {
   trimEdgeBounds,
 } from "@/lib/edits";
 import type { ClipSegment, Word } from "@/lib/types";
-import { CUT_FIT_MODES, CUT_SNAP_DISTANCES } from "@/lib/playerPrefs";
-import type { CutFitMode } from "@/lib/cutSnap";
-import type { MessageKey } from "@/lib/i18n";
 import { isDisfluencyPlaceholder } from "@/lib/disfluencies";
 import { VAD_SAMPLE_RATE } from "@/lib/vad";
 import { peakBetween } from "@/lib/waveform";
 import { useCutRanges } from "@/hooks/useCutRanges";
 import { useIsDark } from "@/hooks/useIsDark";
+import CutOptionsMenu from "./CutOptionsMenu";
 import PlayerSettingsMenu from "./PlayerSettingsMenu";
 import { useI18n } from "./I18nProvider";
 
@@ -65,16 +63,6 @@ const SPLIT_HOVER_PX = 10;
 /** Inset + radius for selected clip/cut outlines (`rounded-sm` ≈ 2px). */
 const SELECTION_INSET = 2;
 const SELECTION_RADIUS = 2;
-const CUT_MODE_LABELS: Record<CutFitMode, MessageKey> = {
-  fit: "player.cutFit",
-  gap: "player.cutGap",
-  bounds: "player.cutBounds",
-};
-const CUT_MODE_HELP: Record<CutFitMode, MessageKey> = {
-  fit: "player.cutHelpFit",
-  gap: "player.cutHelpGap",
-  bounds: "player.cutHelpBounds",
-};
 
 /** Canvas path for a rounded rect (used to keep cut fills inside the selection ring). */
 function roundRectPath(
@@ -121,10 +109,6 @@ export default function Timeline() {
   const selectedCutIndex = useEditorStore((s) => s.selectedCutIndex);
   const selectedWordIds = useEditorStore((s) => s.selectedWordIds);
   const status = useEditorStore((s) => s.status);
-  const cutFitMode = useEditorStore((s) => s.cutFitMode);
-  const cutSnapDistance = useEditorStore((s) => s.cutSnapDistance);
-  const setCutFitMode = useEditorStore((s) => s.setCutFitMode);
-  const setCutSnapDistance = useEditorStore((s) => s.setCutSnapDistance);
 
   const cuts = useCutRanges();
   const keeps = useMemo(() => getKeepRanges(cuts, duration), [cuts, duration]);
@@ -824,67 +808,10 @@ export default function Timeline() {
 
           <div className="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
 
-          {/* Player settings: preview speed, cut placement, silence threshold,
-              micro fades — the same prefs the Tools and Export menus show. */}
+          {/* Word-cut options (placement mode, start/end thresholds, search
+              distance) and player settings (speed, silence threshold, fades). */}
+          <CutOptionsMenu />
           <PlayerSettingsMenu />
-        </div>
-      </div>
-
-      {/* Cut behavior stays visible in the player toolbar instead of being hidden
-          in the small settings popover. */}
-      <div className="flex h-9 shrink-0 items-center gap-2 overflow-x-auto border-b border-zinc-100 px-2.5 dark:border-zinc-800">
-        <span className="shrink-0 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
-          {t("player.cutPlacement")}
-        </span>
-        <div
-          className="flex shrink-0 items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
-          role="radiogroup"
-          aria-label={t("player.cutPlacement")}
-        >
-          {CUT_FIT_MODES.map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              role="radio"
-              aria-checked={mode === cutFitMode}
-              title={`${t(CUT_MODE_LABELS[mode])} — ${t(CUT_MODE_HELP[mode])}`}
-              onClick={() => setCutFitMode(mode)}
-              className={`shrink-0 cursor-pointer rounded-md px-2 py-1 text-[10px] font-medium transition ${
-                mode === cutFitMode
-                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-50"
-                  : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
-              }`}
-            >
-              {t(CUT_MODE_LABELS[mode])}
-            </button>
-          ))}
-        </div>
-        <span className="mx-0.5 h-4 w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />
-        <span className="shrink-0 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
-          {t("player.cutDistance")}
-        </span>
-        <div
-          className="flex shrink-0 items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
-          role="radiogroup"
-          aria-label={t("player.cutDistance")}
-        >
-          {CUT_SNAP_DISTANCES.map((distance) => (
-            <button
-              key={distance}
-              type="button"
-              role="radio"
-              aria-checked={distance === cutSnapDistance}
-              title={`${t("player.cutDistance")}: ±${distance}s`}
-              onClick={() => setCutSnapDistance(distance)}
-              className={`shrink-0 cursor-pointer rounded-md px-2 py-1 text-[10px] font-medium tabular-nums transition ${
-                distance === cutSnapDistance
-                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-50"
-                  : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
-              }`}
-            >
-              {distance}s
-            </button>
-          ))}
         </div>
       </div>
 

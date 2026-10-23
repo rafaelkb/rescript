@@ -128,6 +128,103 @@ export function saveCutSnapDistance(value: number): number {
   return clamped;
 }
 
+/**
+ * Bounds for the start / end word-cut thresholds (0 = hug the deleted word,
+ * 1 = reach all the way across the pause/gap up to the neighboring kept word).
+ */
+export const CUT_EDGE_THRESHOLD_MIN = 0;
+export const CUT_EDGE_THRESHOLD_MAX = 1;
+export const CUT_EDGE_THRESHOLD_STEP = 0.05;
+export const DEFAULT_CUT_START_THRESHOLD = 0.5;
+export const DEFAULT_CUT_END_THRESHOLD = 0.5;
+
+const CUT_START_THRESHOLD_STORAGE_KEY = "rescript.cut-start-threshold";
+const CUT_END_THRESHOLD_STORAGE_KEY = "rescript.cut-end-threshold";
+
+/**
+ * Clamp a cut-edge threshold into `[0, 1]` (rounded to whole percentage points
+ * so slider drags don't accumulate float drift). Non-finite values fall back.
+ */
+export function clampCutEdgeThreshold(
+  value: number,
+  fallback = DEFAULT_CUT_START_THRESHOLD
+): number {
+  if (!Number.isFinite(value)) return fallback;
+  const clamped = Math.min(
+    CUT_EDGE_THRESHOLD_MAX,
+    Math.max(CUT_EDGE_THRESHOLD_MIN, value)
+  );
+  return Math.round(clamped * 100) / 100;
+}
+
+/** Human label for a cut-edge threshold: `0%`, `50%`, `100%`. */
+export function formatCutEdgeThreshold(value: number): string {
+  return `${Math.round(clampCutEdgeThreshold(value) * 100)}%`;
+}
+
+function loadCutEdgeThreshold(storageKey: string, fallback: number): number {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (raw != null && raw.trim() !== "") {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) return clampCutEdgeThreshold(parsed, fallback);
+    }
+  } catch {
+    // private mode / disabled storage
+  }
+  return fallback;
+}
+
+function saveCutEdgeThreshold(
+  storageKey: string,
+  value: number,
+  fallback: number
+): number {
+  const clamped = clampCutEdgeThreshold(value, fallback);
+  if (typeof window === "undefined") return clamped;
+  try {
+    window.localStorage.setItem(storageKey, String(clamped));
+  } catch {
+    // private mode / disabled storage
+  }
+  return clamped;
+}
+
+/** Read the saved leading-edge cut threshold (defaults to 0.5 / 50%). */
+export function loadCutStartThreshold(): number {
+  return loadCutEdgeThreshold(
+    CUT_START_THRESHOLD_STORAGE_KEY,
+    DEFAULT_CUT_START_THRESHOLD
+  );
+}
+
+/** Persist the leading-edge cut threshold; returns the clamped value. */
+export function saveCutStartThreshold(value: number): number {
+  return saveCutEdgeThreshold(
+    CUT_START_THRESHOLD_STORAGE_KEY,
+    value,
+    DEFAULT_CUT_START_THRESHOLD
+  );
+}
+
+/** Read the saved trailing-edge cut threshold (defaults to 0.5 / 50%). */
+export function loadCutEndThreshold(): number {
+  return loadCutEdgeThreshold(
+    CUT_END_THRESHOLD_STORAGE_KEY,
+    DEFAULT_CUT_END_THRESHOLD
+  );
+}
+
+/** Persist the trailing-edge cut threshold; returns the clamped value. */
+export function saveCutEndThreshold(value: number): number {
+  return saveCutEdgeThreshold(
+    CUT_END_THRESHOLD_STORAGE_KEY,
+    value,
+    DEFAULT_CUT_END_THRESHOLD
+  );
+}
+
 export function isCutFitMode(value: unknown): value is CutFitMode {
   return value === "fit" || value === "gap" || value === "bounds";
 }

@@ -29,11 +29,15 @@ import {
 import { isModelId, loadModelPreference, saveModelPreference } from "./models";
 import { snapDeletionCutPoints, type CutFitMode } from "./cutSnap";
 import {
+  loadCutEndThreshold,
   loadCutFitMode,
   loadCutSnapDistance,
+  loadCutStartThreshold,
   loadPlaybackRate,
+  saveCutEndThreshold,
   saveCutFitMode,
   saveCutSnapDistance,
+  saveCutStartThreshold,
   savePlaybackRate,
 } from "./playerPrefs";
 import { loadSilenceThreshold, saveSilenceThreshold } from "./silences";
@@ -196,6 +200,10 @@ interface EditorState {
   cutFitMode: CutFitMode;
   /** How far cut edges may search for a silence to fit into (seconds). */
   cutSnapDistance: number;
+  /** Leading-edge cut threshold between the deleted word (0) and previous kept word (1). */
+  cutStartThreshold: number;
+  /** Trailing-edge cut threshold between the deleted word (0) and next kept word (1). */
+  cutEndThreshold: number;
   /** "Remove silences" gap threshold (seconds). */
   silenceThreshold: number;
   /** Tiny fades at every cut point (preview and export). */
@@ -304,6 +312,10 @@ interface EditorState {
   setCutFitMode: (mode: CutFitMode) => void;
   /** Change the audio search distance for cut fitting, and remember it. */
   setCutSnapDistance: (seconds: number) => void;
+  /** Change the leading-edge cut threshold (0..1) and remember it. */
+  setCutStartThreshold: (value: number) => void;
+  /** Change the trailing-edge cut threshold (0..1) and remember it. */
+  setCutEndThreshold: (value: number) => void;
   /** Change the "Remove silences" threshold (clamped) and remember it. */
   setSilenceThreshold: (seconds: number) => void;
   /** Toggle micro fades at cuts and remember it. */
@@ -438,6 +450,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   playbackRate: loadPlaybackRate(),
   cutFitMode: loadCutFitMode(),
   cutSnapDistance: loadCutSnapDistance(),
+  cutStartThreshold: loadCutStartThreshold(),
+  cutEndThreshold: loadCutEndThreshold(),
   silenceThreshold: loadSilenceThreshold(),
   microFades: loadMicroFadesPreference(),
 
@@ -725,7 +739,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   deleteWords: (ids) => {
     if (ids.length === 0) return;
-    const { words, waveform, duration, cutFitMode, cutSnapDistance } = get();
+    const {
+      words,
+      waveform,
+      duration,
+      cutFitMode,
+      cutSnapDistance,
+      cutStartThreshold,
+      cutEndThreshold,
+    } = get();
     const idSet = new Set(ids);
     const newlyDeleted: number[] = [];
     const next = words.map((w) => {
@@ -742,6 +764,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       words: snapDeletionCutPoints(next, newlyDeleted, waveform, duration, {
         mode: cutFitMode,
         maxSnapS: cutSnapDistance,
+        startThreshold: cutStartThreshold,
+        endThreshold: cutEndThreshold,
       }),
       selectedCutIndex: null,
     });
@@ -1060,6 +1084,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setCutFitMode: (mode) => set({ cutFitMode: saveCutFitMode(mode) }),
   setCutSnapDistance: (seconds) =>
     set({ cutSnapDistance: saveCutSnapDistance(seconds) }),
+  setCutStartThreshold: (value) =>
+    set({ cutStartThreshold: saveCutStartThreshold(value) }),
+  setCutEndThreshold: (value) =>
+    set({ cutEndThreshold: saveCutEndThreshold(value) }),
   setSilenceThreshold: (seconds) =>
     set({ silenceThreshold: saveSilenceThreshold(seconds) }),
   setMicroFades: (enabled) => {
