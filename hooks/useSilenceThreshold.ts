@@ -1,23 +1,15 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import {
-  clampSilenceThreshold,
-  loadSilenceThreshold,
-  saveSilenceThreshold,
-} from "@/lib/silences";
+import { useEditorStore } from "@/lib/store";
 
 /**
- * The "Remove silences" gap threshold (seconds), persisted across sessions.
- * Safe to read in the initializer because the whole editor tree is client-only
- * (`ssr: false`).
+ * The "Remove silences" gap threshold (seconds).
+ *
+ * Backed by the editor store so the Tools menu and the player settings can't
+ * drift apart; the store seeds it from localStorage and persists every change.
  */
 export function useSilenceThreshold() {
-  const [threshold, setThresholdState] = useState(() => loadSilenceThreshold());
-
-  const setThreshold = useCallback((next: number) => {
-    setThresholdState(saveSilenceThreshold(clampSilenceThreshold(next)));
-  }, []);
-
+  const threshold = useEditorStore((s) => s.silenceThreshold);
+  const setThreshold = useEditorStore((s) => s.setSilenceThreshold);
   return { threshold, setThreshold };
 }

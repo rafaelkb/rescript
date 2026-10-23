@@ -41,6 +41,7 @@ import { VAD_SAMPLE_RATE } from "@/lib/vad";
 import { peakBetween } from "@/lib/waveform";
 import { useCutRanges } from "@/hooks/useCutRanges";
 import { useIsDark } from "@/hooks/useIsDark";
+import PlayerSettingsMenu from "./PlayerSettingsMenu";
 import { useI18n } from "./I18nProvider";
 
 const RULER_H = 18;
@@ -789,6 +790,12 @@ export default function Timeline() {
               <ZoomIn size={14} />
             </button>
           </div>
+
+          <div className="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+
+          {/* Player settings: preview speed, cut placement, silence threshold,
+              micro fades — the same prefs the Tools and Export menus show. */}
+          <PlayerSettingsMenu />
         </div>
       </div>
 

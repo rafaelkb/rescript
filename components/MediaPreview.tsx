@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type SyntheticEvent } from "react";
 import { useEditorStore } from "@/lib/store";
 import { cutRangeAt, PLAYHEAD_EPSILON_S } from "@/lib/edits";
 import { useCutRanges } from "@/hooks/useCutRanges";
@@ -17,6 +17,7 @@ export default function MediaPreview() {
   const setDuration = useEditorStore((s) => s.setDuration);
   const setPlaying = useEditorStore((s) => s.setPlaying);
   const setCurrentTime = useEditorStore((s) => s.setCurrentTime);
+  const playbackRate = useEditorStore((s) => s.playbackRate);
   const cuts = useCutRanges();
 
   const mediaRef = useRef<HTMLMediaElement | null>(null);
@@ -25,6 +26,14 @@ export default function MediaPreview() {
   useEffect(() => {
     cutsRef.current = cuts;
   }, [cuts]);
+
+  // Preview speed. Applied on every element (a new source resets the rate in
+  // most browsers) and again once metadata lands, so a reload doesn't silently
+  // drop back to 1x.
+  useEffect(() => {
+    const media = mediaRef.current;
+    if (media) media.playbackRate = playbackRate;
+  }, [playbackRate, mediaUrl]);
 
   // Set while *we* dip the volume around a cut skip; never clobber a mute the
   // user (or the browser) asked for.
@@ -92,6 +101,15 @@ export default function MediaPreview() {
     useEditorStore.getState().togglePlayback();
   }, []);
 
+  const handleLoadedMetadata = useCallback(
+    (e: SyntheticEvent<HTMLMediaElement>) => {
+      const media = e.currentTarget;
+      media.playbackRate = useEditorStore.getState().playbackRate;
+      setDuration(media.duration);
+    },
+    [setDuration]
+  );
+
   const handlePlay = useCallback(() => setPlaying(true), [setPlaying]);
   // A paused element can't hold a pending dip; hand the volume back so the
   // next play doesn't start silent.
@@ -112,7 +130,7 @@ export default function MediaPreview() {
         ref={refCb}
         src={mediaUrl}
         preload="metadata"
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onLoadedMetadata={handleLoadedMetadata}
         onPlay={handlePlay}
         onPause={handlePause}
         className="hidden"
@@ -128,7 +146,7 @@ export default function MediaPreview() {
           src={mediaUrl}
           playsInline
           onClick={togglePlay}
-          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+          onLoadedMetadata={handleLoadedMetadata}
           onPlay={handlePlay}
           onPause={handlePause}
           className="max-h-full max-w-full cursor-pointer rounded-sm bg-black shadow-lg shadow-zinc-900/10 dark:shadow-black/40"

@@ -27,7 +27,18 @@ import {
   trimEdgeResult,
 } from "./edits";
 import { isModelId, loadModelPreference, saveModelPreference } from "./models";
-import { snapDeletionCutPoints } from "./cutSnap";
+import { snapDeletionCutPoints, type CutFitMode } from "./cutSnap";
+import {
+  loadCutFitMode,
+  loadPlaybackRate,
+  saveCutFitMode,
+  savePlaybackRate,
+} from "./playerPrefs";
+import { loadSilenceThreshold, saveSilenceThreshold } from "./silences";
+import {
+  loadMicroFadesPreference,
+  saveMicroFadesPreference,
+} from "./exportPrefs";
 import { isTranscriptSource, type TranscriptSource } from "./source";
 import { trackEvent } from "./telemetry";
 import {
@@ -175,6 +186,17 @@ interface EditorState {
   playing: boolean;
   videoEl: HTMLMediaElement | null;
 
+  // Player / editing preferences (persisted to localStorage, shared by every
+  // menu that exposes them so two UIs can never disagree)
+  /** Preview playback speed; 1 is natural (see lib/playerPrefs.ts). */
+  playbackRate: number;
+  /** Where text deletions put their cut edges. */
+  cutFitMode: CutFitMode;
+  /** "Remove silences" gap threshold (seconds). */
+  silenceThreshold: number;
+  /** Tiny fades at every cut point (preview and export). */
+  microFades: boolean;
+
   // Export
   exportResult: ExportResult | null;
   exportOpen: boolean;
@@ -272,6 +294,14 @@ interface EditorState {
   setVideoEl: (el: HTMLMediaElement | null) => void;
   /** Play/pause, skipping out of cut ranges and restarting from the start if parked at the end. */
   togglePlayback: () => void;
+  /** Change preview speed (clamped to the offered rates) and remember it. */
+  setPlaybackRate: (rate: number) => void;
+  /** Change where deletions cut, and remember it. */
+  setCutFitMode: (mode: CutFitMode) => void;
+  /** Change the "Remove silences" threshold (clamped) and remember it. */
+  setSilenceThreshold: (seconds: number) => void;
+  /** Toggle micro fades at cuts and remember it. */
+  setMicroFades: (enabled: boolean) => void;
   /** Replace the current export result, freeing the previous one. */
   setExportResult: (result: ExportResult | null) => void;
   setExportOpen: (open: boolean) => void;
@@ -398,6 +428,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   currentTime: 0,
   playing: false,
   videoEl: null,
+
+  playbackRate: loadPlaybackRate(),
+  cutFitMode: loadCutFitMode(),
+  silenceThreshold: loadSilenceThreshold(),
+  microFades: loadMicroFadesPreference(),
 
   exportResult: null,
   exportOpen: false,
@@ -683,7 +718,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   deleteWords: (ids) => {
     if (ids.length === 0) return;
-    const { words, waveform, duration } = get();
+    const { words, waveform, duration, cutFitMode } = get();
     const idSet = new Set(ids);
     const newlyDeleted: number[] = [];
     const next = words.map((w) => {
@@ -697,7 +732,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       // Snap the new cuts' outer edges onto the audio gaps around the deleted
       // run (see lib/cutSnap.ts): word timestamps run tight often enough that
       // cutting at them verbatim leaves fragments of the deleted speech.
-      words: snapDeletionCutPoints(next, newlyDeleted, waveform, duration),
+      words: snapDeletionCutPoints(next, newlyDeleted, waveform, duration, {
+        mode: cutFitMode,
+      }),
       selectedCutIndex: null,
     });
   },
@@ -1011,6 +1048,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   setPlaying: (playing) => set({ playing }),
   setVideoEl: (videoEl) => set({ videoEl }),
+  setPlaybackRate: (rate) => set({ playbackRate: savePlaybackRate(rate) }),
+  setCutFitMode: (mode) => set({ cutFitMode: saveCutFitMode(mode) }),
+  setSilenceThreshold: (seconds) =>
+    set({ silenceThreshold: saveSilenceThreshold(seconds) }),
+  setMicroFades: (enabled) => {
+    saveMicroFadesPreference(enabled);
+    set({ microFades: enabled });
+  },
   togglePlayback: () => {
     const s = get();
     const media = s.videoEl;
