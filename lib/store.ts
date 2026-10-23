@@ -30,8 +30,10 @@ import { isModelId, loadModelPreference, saveModelPreference } from "./models";
 import { snapDeletionCutPoints, type CutFitMode } from "./cutSnap";
 import {
   loadCutFitMode,
+  loadCutSnapDistance,
   loadPlaybackRate,
   saveCutFitMode,
+  saveCutSnapDistance,
   savePlaybackRate,
 } from "./playerPrefs";
 import { loadSilenceThreshold, saveSilenceThreshold } from "./silences";
@@ -192,6 +194,8 @@ interface EditorState {
   playbackRate: number;
   /** Where text deletions put their cut edges. */
   cutFitMode: CutFitMode;
+  /** How far cut edges may search for a silence to fit into (seconds). */
+  cutSnapDistance: number;
   /** "Remove silences" gap threshold (seconds). */
   silenceThreshold: number;
   /** Tiny fades at every cut point (preview and export). */
@@ -298,6 +302,8 @@ interface EditorState {
   setPlaybackRate: (rate: number) => void;
   /** Change where deletions cut, and remember it. */
   setCutFitMode: (mode: CutFitMode) => void;
+  /** Change the audio search distance for cut fitting, and remember it. */
+  setCutSnapDistance: (seconds: number) => void;
   /** Change the "Remove silences" threshold (clamped) and remember it. */
   setSilenceThreshold: (seconds: number) => void;
   /** Toggle micro fades at cuts and remember it. */
@@ -431,6 +437,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   playbackRate: loadPlaybackRate(),
   cutFitMode: loadCutFitMode(),
+  cutSnapDistance: loadCutSnapDistance(),
   silenceThreshold: loadSilenceThreshold(),
   microFades: loadMicroFadesPreference(),
 
@@ -718,7 +725,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   deleteWords: (ids) => {
     if (ids.length === 0) return;
-    const { words, waveform, duration, cutFitMode } = get();
+    const { words, waveform, duration, cutFitMode, cutSnapDistance } = get();
     const idSet = new Set(ids);
     const newlyDeleted: number[] = [];
     const next = words.map((w) => {
@@ -734,6 +741,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       // cutting at them verbatim leaves fragments of the deleted speech.
       words: snapDeletionCutPoints(next, newlyDeleted, waveform, duration, {
         mode: cutFitMode,
+        maxSnapS: cutSnapDistance,
       }),
       selectedCutIndex: null,
     });
@@ -1050,6 +1058,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setVideoEl: (videoEl) => set({ videoEl }),
   setPlaybackRate: (rate) => set({ playbackRate: savePlaybackRate(rate) }),
   setCutFitMode: (mode) => set({ cutFitMode: saveCutFitMode(mode) }),
+  setCutSnapDistance: (seconds) =>
+    set({ cutSnapDistance: saveCutSnapDistance(seconds) }),
   setSilenceThreshold: (seconds) =>
     set({ silenceThreshold: saveSilenceThreshold(seconds) }),
   setMicroFades: (enabled) => {

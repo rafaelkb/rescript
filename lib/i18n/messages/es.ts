@@ -107,6 +107,7 @@ export const es: Record<MessageKey, string> = {
   "player.speed": "Velocidad de reproducción",
   "player.speedHelp": "Solo en la vista previa: las exportaciones mantienen la velocidad original.",
   "player.cutPlacement": "Dónde caen los cortes",
+  "player.cutDistance": "Alcance de búsqueda de audio",
   "player.cutFit": "Ajustar dentro del silencio",
   "player.cutHelpFit": "Los bordes del corte se quedan dentro de las pausas alrededor de las palabras borradas, así las palabras vecinas conservan sus primeros y últimos milisegundos.",
   "player.cutGap": "Pausa completa (centrada)",

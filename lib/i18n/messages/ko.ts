@@ -107,6 +107,7 @@ export const ko: Record<MessageKey, string> = {
   "player.speed": "재생 속도",
   "player.speedHelp": "미리보기 전용 — 내보내기는 원래 속도를 유지합니다.",
   "player.cutPlacement": "컷 위치",
+  "player.cutDistance": "오디오 검색 범위",
   "player.cutFit": "무음 안에 맞추기",
   "player.cutHelpFit": "컷 가장자리가 삭제된 단어 주변의 무음 안에 머물러, 이웃 단어의 처음과 마지막 밀리초가 유지됩니다.",
   "player.cutGap": "무음 전체(가운데)",

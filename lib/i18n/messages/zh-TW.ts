@@ -107,6 +107,7 @@ export const zhTW: Record<MessageKey, string> = {
   "player.speed": "播放速度",
   "player.speedHelp": "僅限預覽 — 匯出仍維持原始速度。",
   "player.cutPlacement": "剪裁位置",
+  "player.cutDistance": "音訊搜尋範圍",
   "player.cutFit": "貼合靜音區間",
   "player.cutHelpFit": "剪裁邊緣停留在被刪除單字周圍的停頓內，相鄰單字開頭與結尾的毫秒不會被剪掉。",
   "player.cutGap": "整個停頓（置中）",

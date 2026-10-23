@@ -109,6 +109,7 @@ export const zhCN: Record<MessageKey, string> = {
   "player.speed": "播放速度",
   "player.speedHelp": "仅预览 — 导出始终使用原始速度。",
   "player.cutPlacement": "剪切位置",
+  "player.cutDistance": "音频搜索范围",
   "player.cutFit": "贴合静音区间",
   "player.cutHelpFit": "剪切边缘停留在被删除单词周围的停顿内，相邻单词的开头和结尾毫秒不会被切掉。",
   "player.cutGap": "整个停顿（居中）",
